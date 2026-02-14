@@ -1,1 +1,4 @@
 project_id = "lhjgdavbrjvlkitkvhmv"
+
+[functions.analyze-scam]
+verify_jwt = false

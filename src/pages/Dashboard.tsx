@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Shield, MessageSquareWarning, Eye, Activity, ArrowLeft, Brain, Fingerprint, Users, AlertTriangle, CheckCircle, XCircle, Keyboard, Mouse, Clock, Smartphone } from "lucide-react";
+import { Shield, MessageSquareWarning, Eye, Activity, ArrowLeft, Brain, Fingerprint, Users, AlertTriangle, CheckCircle, XCircle, Keyboard, Mouse, Clock, Smartphone, Sparkles } from "lucide-react";
 import SecureCircleVisual from "@/components/SecureCircleVisual";
 import LanguageSelector from "@/components/LanguageSelector";
 import { useLanguage } from "@/i18n/LanguageContext";
 import TrustScoreRing from "@/components/TrustScoreRing";
 import useBehavioralBiometrics from "@/hooks/useBehavioralBiometrics";
-import { analyzeScamMessage, type ScamResult } from "@/lib/scamAnalyzer";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type Tab = "scam" | "deepfake" | "biometrics" | "securecircle";
 
@@ -73,9 +74,9 @@ const Dashboard = () => {
 // Inline simplified tabs to avoid complex component imports with Supabase deps
 
 const ScamTab = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [inputText, setInputText] = useState("");
-  const [result, setResult] = useState<ScamResult | null>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const sampleMessages = [
@@ -85,14 +86,30 @@ const ScamTab = () => {
     "Hi, your IOB fixed deposit maturity is due on 15th March. Visit nearest branch.",
   ];
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!inputText.trim()) return;
     setIsAnalyzing(true);
     setResult(null);
-    setTimeout(() => {
-      setResult(analyzeScamMessage(inputText));
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-scam", {
+        body: { message: inputText, language },
+      });
+      if (error) {
+        console.error("Analysis error:", error);
+        toast.error(error.message || "Analysis failed. Please try again.");
+        return;
+      }
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+      setResult(data);
+    } catch (e) {
+      console.error("Analysis failed:", e);
+      toast.error("Analysis failed. Please try again.");
+    } finally {
       setIsAnalyzing(false);
-    }, 1200);
+    }
   };
 
   const getRiskColor = (level: string) => {
@@ -221,6 +238,17 @@ const ScamTab = () => {
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">{t.recommendation}</p>
               <p className="text-sm text-foreground leading-relaxed">{(t as any)[result.recommendation]}</p>
             </div>
+
+            {/* AI Explanation */}
+            {result.aiExplanation && (
+              <div className="glass rounded-xl p-5 border border-primary/20">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2">
+                  <Sparkles className="w-3 h-3 text-primary" />
+                  {t.aiExplanationLabel}
+                </p>
+                <p className="text-sm text-foreground leading-relaxed">{result.aiExplanation}</p>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
